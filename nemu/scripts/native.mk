@@ -25,9 +25,10 @@ $(BINARY):: compile_git
 # $(info BINARY is $(BINARY)) # /nemu/build/riscv32-nemu-interpreter
 
 # Some convenient rules
-
 override ARGS ?= --log=$(BUILD_DIR)/nemu-log.txt
 override ARGS += $(ARGS_DIFF)
+
+$(info ARGS is $(ARGS))
 
 # Command to execute NEMU
 IMG ?=

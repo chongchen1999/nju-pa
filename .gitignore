@@ -11,3 +11,6 @@
 !init.sh
 /am-kernels
 /fceux-am
+/ref
+!/utils/*
+/std

@@ -3,12 +3,12 @@
  *
  * NEMU is licensed under Mulan PSL v2.
  * You can use this software according to the terms and conditions of the Mulan
- *PSL v2. You may obtain a copy of Mulan PSL v2 at:
+ * PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
  *
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- *KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- *NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  *
  * See the Mulan PSL v2 for more details.
  ***************************************************************************************/
@@ -25,12 +25,66 @@
  */
 #define MAX_INST_TO_PRINT 10
 
+/* Instruction trace ring buffer size */
+#define ITRACE_RING_SIZE 16
+
+/* Structure to store instruction information in the ring buffer */
+typedef struct {
+    char logbuf[128]; /* Instruction log buffer */
+    vaddr_t pc;       /* Program counter */
+} ITNode;
+
+/* Global variables */
 CPU_state cpu = {};
 uint64_t g_nr_guest_inst = 0;
-static uint64_t g_timer = 0;  // unit: us
+static uint64_t g_timer = 0; /* unit: us */
 static bool g_print_step = false;
 
+/* Instruction trace ring buffer */
+static ITNode iringbuf[ITRACE_RING_SIZE] = {};
+static int iringbuf_index = 0;
+
+/* Function declarations */
 void device_update();
+static void record_instruction_trace(Decode *s);
+static void print_itrace();
+
+/* Record instruction in the trace ring buffer */
+static void record_instruction_trace(Decode *s) {
+    IFDEF(CONFIG_ITRACE, {
+        strcpy(iringbuf[iringbuf_index].logbuf, s->logbuf);
+        iringbuf[iringbuf_index].pc = s->pc;
+        iringbuf_index = (iringbuf_index + 1) % ITRACE_RING_SIZE;
+    });
+}
+
+/* Print instruction trace ring buffer */
+static void print_itrace() {
+    IFDEF(CONFIG_ITRACE, {
+        /* Log instruction trace to log file */
+        Log("Instruction trace:");
+
+        /* The most recent instruction is at (iringbuf_index - 1) */
+        int last_idx =
+            (iringbuf_index - 1 + ITRACE_RING_SIZE) % ITRACE_RING_SIZE;
+
+        /* Print instructions in order, starting from the oldest */
+        for (int i = 0; i < ITRACE_RING_SIZE; i++) {
+            int idx = (iringbuf_index + i) % ITRACE_RING_SIZE;
+
+            /* Skip empty entries */
+            if (iringbuf[idx].logbuf[0] == '\0')
+                continue;
+
+            /* Mark the most recent instruction with an arrow */
+            if (idx == last_idx) {
+                Log("  --> %s", iringbuf[idx].logbuf);
+            } else {
+                Log("      %s", iringbuf[idx].logbuf);
+            }
+        }
+    });
+}
 
 static void trace_and_difftest(Decode *_this, vaddr_t dnpc) {
 #ifdef CONFIG_ITRACE_COND
@@ -41,6 +95,10 @@ static void trace_and_difftest(Decode *_this, vaddr_t dnpc) {
     if (g_print_step) {
         IFDEF(CONFIG_ITRACE, puts(_this->logbuf));
     }
+
+    /* Store instruction in ring buffer */
+    record_instruction_trace(_this);
+
     IFDEF(CONFIG_DIFFTEST, difftest_step(_this->pc, dnpc));
 }
 
@@ -105,6 +163,8 @@ static void statistic() {
 
 void assert_fail_msg() {
     isa_reg_display();
+    /* Print instruction trace when an error occurs - show on terminal */
+    print_itrace();
     statistic();
 }
 
@@ -144,7 +204,10 @@ void cpu_exec(uint64_t n) {
                             ? ANSI_FMT("HIT GOOD TRAP", ANSI_FG_GREEN)
                             : ANSI_FMT("HIT BAD TRAP", ANSI_FG_RED))),
                 nemu_state.halt_pc);
-            // fall through
+
+            /* Print instruction trace */
+            print_itrace();
+            /* fall through */
         case NEMU_QUIT:
             statistic();
     }

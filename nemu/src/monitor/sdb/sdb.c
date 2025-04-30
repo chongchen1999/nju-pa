@@ -14,6 +14,7 @@
  ***************************************************************************************/
 
 #include "sdb.h"
+
 #include <cpu/cpu.h>
 #include <isa.h>
 #include <memory/vaddr.h>
@@ -125,8 +126,9 @@ static int cmd_si(char* args) {
 // Implement the info command
 static int cmd_info(char* args) {
     if (args == NULL) {
-        printf("'info' requires an argument (r for registers, w for "
-               "watchpoints)\n");
+        printf(
+            "'info' requires an argument (r for registers, w for "
+            "watchpoints)\n");
         return 0;
     }
 
